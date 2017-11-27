@@ -84,13 +84,13 @@ def worker(rot_idx, rot, off_idx, off_path):
 
   print('create voxels')
   t = time.time()
-  grid = pyvoxelizer.Grid.create_from_off(off_path, vx_res,vx_res,vx_res, R, pad=pad, n_threads=n_threads)
+  grid = calculate_voxels_from_off(off_path, vx_res)
   print('  took %f[s]' % (time.time() - t))
 
-  oc_out_path = os.path.join(rot_out_dir, '%s_%s.oc' % (train_test_prefix, basename))
-  print('write bin - %s' % oc_out_path)
+  grid_out_path = os.path.join(rot_out_dir, '%s_%s.oc' % (train_test_prefix, basename))
+  print('write bin - %s' % grid_out_path)
   t = time.time()
-  grid.write_bin(oc_out_path)
+  write_grid(grid_out_path, grid, vx_res, vx_res, vx_res)
   print('  took %f[s]' % (time.time() - t))
 
 start_t = time.time()

@@ -76,8 +76,8 @@ def worker(rot_idx, rot, off_idx, off_path):
       [np.sin(phi), np.cos(phi), 0],
       [0, 0, 1]
     ], dtype=np.float32)
-  rot_out_dir = os.path.join(out_root, 'rot%03d' % np.round(rot))
-
+  #rot_out_dir = os.path.join(out_root, 'rot%03d' % np.round(rot))
+  rot_out_dir = out_root
 
   basename, ext = os.path.splitext(os.path.basename(off_path))
   train_test_prefix = os.path.basename(os.path.dirname(off_path))
@@ -87,7 +87,7 @@ def worker(rot_idx, rot, off_idx, off_path):
   grid = calculate_voxels_from_off(off_path, vx_res)
   print('  took %f[s]' % (time.time() - t))
 
-  grid_out_path = os.path.join(rot_out_dir, '%s_%s.oc' % (train_test_prefix, basename))
+  grid_out_path = os.path.join(rot_out_dir, '%s_%s.vox' % (train_test_prefix, basename))
   print('write bin - %s' % grid_out_path)
   t = time.time()
   write_grid(grid_out_path, grid, vx_res, vx_res, vx_res)

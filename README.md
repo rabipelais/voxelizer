@@ -4,6 +4,8 @@ To change certain parameters, such as the voxels resolution, or the number of pr
 
 To run, type in `python ./create.py`
 
+To create the grid from a file directly, use the function `calculate_voxel_from_off(file, resolution)` from the module `voxelizer`. The result is a 1D np.array of `1`s for voxels and `0`s for empty space in WHD order.
+
 The resulting files will be in the folder `preprocessed-res-X` where X is the resolution (as in X^3)
 
 To compile the C extension, simply run in the same folder:

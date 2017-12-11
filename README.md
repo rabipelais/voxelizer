@@ -9,5 +9,5 @@ To create the grid from a file directly, use the function `calculate_voxel_from_
 The resulting files will be in the folder `preprocessed-res-X` where X is the resolution (as in X^3)
 
 To compile the C extension, simply run in the same folder:
-`gcc -shared -o tribox.so -fPIC tribox.c`
+`gcc -shared -o grid.so -fPIC tribox.c`
 Note that if you change the name of the library, you will also have to change the name (and location) on the python wrapper script.

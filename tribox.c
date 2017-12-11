@@ -184,3 +184,27 @@ int triBoxOverlap(float boxcenter[3],float boxhalfsize[3],float triverts[3][3])
 
    return 1;   /* box and triangle overlaps */
 }
+
+int blockTriangle(float cx, float cy, float cz, int nVerts, float* verts, int nFaces, int* faces) {
+	float halfSizes[3] = {0.5, 0.5, 0.5};
+	float vx_c[3];
+	vx_c[0] = cx;
+	vx_c[1] = cy;
+	vx_c[2] = cz;
+
+	for(int i = 0; i < nFaces / 3; i++) {
+		float vertArray[3][3];
+		for(int y = 0; y < 3; y++) {
+			for(int x = 0; x < 3; x++) {
+				vertArray[y][x] = verts[faces[i * 3 + y] * 3 + x];
+			}
+		}
+
+		int intersection = triBoxOverlap(vx_c, halfSizes, vertArray);
+
+		if(intersection > 0) {
+			return 1;
+		}
+	}
+	return 0;
+}

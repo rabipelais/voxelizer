@@ -20,7 +20,7 @@ def parse_off(filename):
             if int(line[0]) != 3:
                 raise Exception('Not a triangle, it has ' + line[0] + ' points.')
             faces.extend([int(s) for s in line[1:]])
-        return verts, faces
+        return np.float32(np.array(verts)), np.intc(np.array(faces))
 
 def rescale(verts, faces, vx_res, pad = 2):
     min_x = float("inf")
@@ -43,9 +43,6 @@ def rescale(verts, faces, vx_res, pad = 2):
 		  max_y = max(max_y, verts[faces[fidx * 3 + vidx] * 3 + 1])
 		  max_z = max(max_z, verts[faces[fidx * 3 + vidx] * 3 + 2])
 
-    #print("bb before rescaling [%f,%f], [%f,%f], [%f,%f]" %
-#		 (min_x, max_x, min_y, max_y, min_z, max_z))
-
 
     depth = vx_res
     width = vx_res
@@ -63,13 +60,13 @@ def rescale(verts, faces, vx_res, pad = 2):
         verts[vidx * 3 + 1] = dst_width * (verts[vidx * 3 + 1] / src_width + 0.5)
         verts[vidx * 3 + 2] = dst_width * (verts[vidx * 3 + 2] / src_width + 0.5)
 
-    print("bb after rescaling [%f,%f], [%f,%f], [%f,%f]\n" %
-            (dst_width * (min_x / src_width + 0.5),
-             dst_width * (max_x / src_width + 0.5),
-             dst_width * (min_y / src_width + 0.5),
-             dst_width * (max_y / src_width + 0.5),
-             dst_width * (min_z / src_width + 0.5),
-             dst_width * (max_z / src_width + 0.5)))
+    # print("bb after rescaling [%f,%f], [%f,%f], [%f,%f]\n" %
+    #         (dst_width * (min_x / src_width + 0.5),
+    #          dst_width * (max_x / src_width + 0.5),
+    #          dst_width * (min_y / src_width + 0.5),
+    #          dst_width * (max_y / src_width + 0.5),
+    #          dst_width * (min_z / src_width + 0.5),
+    #          dst_width * (max_z / src_width + 0.5)))
 
     return verts, faces
 
@@ -85,43 +82,13 @@ def calculate_voxels(verts, faces, width, height, depth):
       gh = (grid_idx // width) % height
       gw = grid_idx % width
 
-      # grid.append(block_triangles(gw / float(width) + (1.0/(2*float(width)))
-      #                             , gh / float(height) + (1.0/(2*float(height)))
-      #                             , gd / float(depth) + (1.0/(2*float(depth))), verts, faces))
-
-      grid.append(block_triangles(gw + 0.5, gh + 0.5, gd + 0.5, verts, faces))
+      grid.append(tribox_wrapper.block_triangle_c(gw + 0.5, gh + 0.5, gd + 0.5, len(verts), verts, len(faces), faces))
 
     gridnp = np.array(grid)
     gridnp.reshape(width, height, depth)
 
     return gridnp
 
-def block_triangles(cx, cy, cz, verts, faces):
-    half_sizes = np.array([0.5, 0.5, 0.5])
-    for fidx in range(len(faces) / 3):
-        vx_c = np.array([cx, cy, cz])
-
-        v0 = np.array([
-              verts[faces[fidx * 3 + 0] * 3 + 0]
-            , verts[faces[fidx * 3 + 0] * 3 + 1]
-            , verts[faces[fidx * 3 + 0] * 3 + 2]])
-
-        v1 = np.array([
-              verts[faces[fidx * 3 + 1] * 3 + 0]
-            , verts[faces[fidx * 3 + 1] * 3 + 1]
-            , verts[faces[fidx * 3 + 1] * 3 + 2]])
-        v2 = np.array([
-              verts[faces[fidx * 3 + 2] * 3 + 0]
-            , verts[faces[fidx * 3 + 2] * 3 + 1]
-            , verts[faces[fidx * 3 + 2] * 3 + 2]])
-
-        verts_array = np.array([v0, v1, v2])
-        intersection = tribox_wrapper.tri_box_intersection(np.float32(vx_c)
-                                                           , np.float32(half_sizes)
-                                                           , np.float32(verts_array))
-        if intersection == 1:
-            return True
-    return False #No face intersects
 
 # Filename and resolution. Assume cube?
 def calculate_voxels_from_off(filename, res):

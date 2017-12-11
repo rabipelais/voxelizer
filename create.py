@@ -88,7 +88,6 @@ def worker(rot_idx, rot, off_idx, off_path):
   print('create voxels')
   t = time.time()
   grid = calculate_voxels_from_off(off_path, vx_res)
-  print grid
   print('  took %f[s]' % (time.time() - t))
 
   grid_out_path = os.path.join(rot_out_dir, '%s_%s.vox' % (train_test_prefix, basename))

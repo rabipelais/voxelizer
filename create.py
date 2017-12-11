@@ -8,15 +8,18 @@ import multiprocessing
 import urllib
 import zipfile
 
+from voxelizer import *
+
 sys.path.append('.')
 
 random.seed(42)
 np.random.seed(42)
 
-vx_res = 64
+vx_res = 8
 pad = 2
 out_root= './preprocessed'
 n_rots = 1
+n_processes = 1
 
 # get MN10 data
 if not os.path.exists('mn10.zip'):
@@ -44,27 +47,27 @@ off_paths.sort()
 
 # fix off header for MN meshes
 print('fixing off headers')
-for path in off_paths:
-  f = open(path, 'r')
-  lines = f.readlines()
-  f.close()
+# for path in off_paths:
+#   f = open(path, 'r')
+#   lines = f.readlines()
+#   f.close()
 
-  # parse header
-  if lines[0].strip().lower() != 'off':
-    print(path)
-    print(lines[0])
+#   # parse header
+#   if lines[0].strip().lower() != 'off':
+#     print(path)
+#     print(lines[0])
 
-    splits = lines[0][3:].strip().split(' ')
-    n_verts = int(splits[0])
-    n_faces = int(splits[1])
-    n_other = int(splits[2])
+#     splits = lines[0][3:].strip().split(' ')
+#     n_verts = int(splits[0])
+#     n_faces = int(splits[1])
+#     n_other = int(splits[2])
 
-    f = open(path, 'w')
-    f.write('OFF\n')
-    f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
-    for line in lines[1:]:
-      f.write(line)
-    f.close()
+#     f = open(path, 'w')
+#     f.write('OFF\n')
+#     f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
+#     for line in lines[1:]:
+#       f.write(line)
+#     f.close()
 
 # create voxel grid from off mesh
 def worker(rot_idx, rot, off_idx, off_path):
@@ -76,7 +79,7 @@ def worker(rot_idx, rot, off_idx, off_path):
       [np.sin(phi), np.cos(phi), 0],
       [0, 0, 1]
     ], dtype=np.float32)
-  #rot_out_dir = os.path.join(out_root, 'rot%03d' % np.round(rot))
+  rot_out_dir = os.path.join(out_root, 'rot%03d' % np.round(rot))
   rot_out_dir = out_root
 
   basename, ext = os.path.splitext(os.path.basename(off_path))
@@ -85,6 +88,7 @@ def worker(rot_idx, rot, off_idx, off_path):
   print('create voxels')
   t = time.time()
   grid = calculate_voxels_from_off(off_path, vx_res)
+  print grid
   print('  took %f[s]' % (time.time() - t))
 
   grid_out_path = os.path.join(rot_out_dir, '%s_%s.vox' % (train_test_prefix, basename))
@@ -96,6 +100,7 @@ def worker(rot_idx, rot, off_idx, off_path):
 start_t = time.time()
 if n_processes > 1:
   pool = multiprocessing.Pool(processes=n_processes)
+
 for rot_idx, rot in enumerate(np.linspace(0, 360, n_rots, endpoint=False)):
   rot_out_dir = os.path.join(out_root, 'rot%03d' % np.round(rot))
   if not os.path.isdir(rot_out_dir):
@@ -103,7 +108,7 @@ for rot_idx, rot in enumerate(np.linspace(0, 360, n_rots, endpoint=False)):
 
 
   for off_idx, off_path in enumerate(off_paths):
-    print('%d pool.apply_async' % off_idx)
+    #print('%d pool.apply_async' % off_idx)
     if n_processes > 1:
       pool.apply_async(worker, args=(rot_idx, rot, off_idx, off_path,))
     else:

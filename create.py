@@ -17,7 +17,7 @@ np.random.seed(42)
 
 vx_res = 8
 pad = 2
-out_root= './preprocessed'
+out_root= './preprocessed-res-' + str(vx_res)
 n_rots = 1
 n_processes = 1
 

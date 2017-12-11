@@ -1,4 +1,5 @@
 import numpy as np
+import tribox_wrapper
 
 def parse_off(filename):
     with open(filename) as fp:
@@ -58,17 +59,17 @@ def rescale(verts, faces, vx_res, pad = 2):
     n_ctr_z = depth/2.0
 
     for vidx in range(len(verts) / 3):
-        verts[vidx * 3 + 0] = verts[vidx * 3 + 0] / src_width + 0.5
-        verts[vidx * 3 + 1] = verts[vidx * 3 + 1] / src_width + 0.5
-        verts[vidx * 3 + 2] = verts[vidx * 3 + 2] / src_width + 0.5
+        verts[vidx * 3 + 0] = dst_width * (verts[vidx * 3 + 0] / src_width + 0.5)
+        verts[vidx * 3 + 1] = dst_width * (verts[vidx * 3 + 1] / src_width + 0.5)
+        verts[vidx * 3 + 2] = dst_width * (verts[vidx * 3 + 2] / src_width + 0.5)
 
     print("bb after rescaling [%f,%f], [%f,%f], [%f,%f]\n" %
-            (min_x / src_width + 0.5,
-             max_x / src_width + 0.5,
-             min_y / src_width + 0.5,
-             max_y / src_width + 0.5,
-             min_z / src_width + 0.5,
-             max_z / src_width + 0.5))
+            (dst_width * (min_x / src_width + 0.5),
+             dst_width * (max_x / src_width + 0.5),
+             dst_width * (min_y / src_width + 0.5),
+             dst_width * (max_y / src_width + 0.5),
+             dst_width * (min_z / src_width + 0.5),
+             dst_width * (max_z / src_width + 0.5)))
 
     return verts, faces
 
@@ -88,9 +89,7 @@ def calculate_voxels(verts, faces, width, height, depth):
       #                             , gh / float(height) + (1.0/(2*float(height)))
       #                             , gd / float(depth) + (1.0/(2*float(depth))), verts, faces))
 
-      grid.append(block_triangles(gw / float(width) + (1.0/(2*float(width)))
-                                  , gh / float(height) + (1.0/(2*float(height)))
-                                  , gd / float(depth) + (1.0/(2*float(depth))), verts, faces))
+      grid.append(block_triangles(gw + 0.5, gh + 0.5, gd + 0.5, verts, faces))
 
     gridnp = np.array(grid)
     gridnp.reshape(width, height, depth)
@@ -98,6 +97,7 @@ def calculate_voxels(verts, faces, width, height, depth):
     return gridnp
 
 def block_triangles(cx, cy, cz, verts, faces):
+    half_sizes = np.array([0.5, 0.5, 0.5])
     for fidx in range(len(faces) / 3):
         vx_c = np.array([cx, cy, cz])
 
@@ -110,203 +110,18 @@ def block_triangles(cx, cy, cz, verts, faces):
               verts[faces[fidx * 3 + 1] * 3 + 0]
             , verts[faces[fidx * 3 + 1] * 3 + 1]
             , verts[faces[fidx * 3 + 1] * 3 + 2]])
-
         v2 = np.array([
               verts[faces[fidx * 3 + 2] * 3 + 0]
             , verts[faces[fidx * 3 + 2] * 3 + 1]
             , verts[faces[fidx * 3 + 2] * 3 + 2]])
 
-        intersection = intersection_triangle_voxel(vx_c, v0, v1, v2)
-        if intersection:
+        verts_array = np.array([v0, v1, v2])
+        intersection = tribox_wrapper.tri_box_intersection(np.float32(vx_c)
+                                                           , np.float32(half_sizes)
+                                                           , np.float32(verts_array))
+        if intersection == 1:
             return True
     return False #No face intersects
-
-def intersection_triangle_voxel(vc, v0, v1, v2):
-
-    # Based on Tomas Akenine-Moeller's work, for a more advanced solution, see Graphics Gems III, Triangle-Cube Intersection, pp. 236-239
-    #    use separating axis theorem to test overlap between triangle and box
-    #    need to test for overlap in these directions:
-    #    1) the {x,y,z}-directions (actually, since we use the AABB of the triangle
-    #       we do not even need to test these)
-    #    2) normal of the triangle
-    #    3) crossproduct(edge from tri, {x,y,z}-directin)
-    #       this gives 3x3=9 more tests
-
-    #Center everything on (0, 0, 0)
-    v0 = v0 - vc
-    v1 = v1 - vc
-    v2 = v2 - vc
-
-    #Compute edges
-    e0 = v1 - v0
-    e1 = v2 - v1
-    e2 = v0 - v2
-
-    #Compute point 3)
-    fex = abs(e0[0])
-    fey = abs(e0[1])
-    fez = abs(e0[2])
-    #X01
-    p0 = e0[2]*v0[1] - e0[1]*v0[2]
-    p2 = e0[2]*v2[1] - e0[1]*v2[2]
-    if(p0<p2):
-        min_i = p0
-        max_i = p2
-    else:
-        min_i = p2
-        max_i = p0
-    rad = fez * 0.5 + fey * 0.5
-    if (min_i > rad or max_i < -rad):
-        return False
-    #Y02
-    p0 = -e0[2]*v0[0] + e0[0]*v0[2]
-    p2 = -e0[2]*v2[0] + e0[0]*v2[2]
-    if(p0<p2):
-        min_i = p0
-        max_i = p2
-    else:
-        min_i = p2
-        max_i = p0
-    rad = fez * 0.5 + fex * 0.5
-    if(min_i>rad or max_i<-rad):
-        return False
-    #Z12
-    p1 = e0[1]*v1[0] - e0[0]*v1[1]
-    p2 = e0[1]*v2[0] - e0[0]*v2[1]
-    if(p2<p1):
-        min_i = p2
-        max_i = p1
-    else:
-        min_i = p1
-        max_i = p2
-    rad = fey * 0.5 + fex * 0.5
-    if(min_i >rad or max_i<-rad):
-        return False
-
-
-    fex = abs(e1[0])
-    fey = abs(e1[1])
-    fez = abs(e1[2])
-    #X01
-    p0 = e1[2]*v0[1] - e1[1]*v0[2]
-    p2 = e1[2]*v2[1] - e1[1]*v2[2]
-    if(p0<p2):
-        min_i = p0
-        max_i = p2
-    else:
-        min_i = p2
-        max_i = p0
-    rad = fez * 0.5 + fey * 0.5
-    if (min_i > rad or max_i < -rad):
-        return False
-    #Y02
-    p0 = -e1[2]*v0[0] + e1[0]*v0[2]
-    p2 = -e1[2]*v2[0] + e1[0]*v2[2]
-    if(p0<p2):
-        min_i = p0
-        max_i = p2
-    else:
-        min_i = p2
-        max_i = p0
-    rad = fez * 0.5 + fex * 0.5
-    if(min_i>rad or max_i<-rad):
-        return False
-    #Z0
-    p0 = e1[1]*v0[0] - e1[0]*v0[1]
-    p1 = e1[1]*v1[0] - e1[0]*v1[1]
-    if(p0<p1):
-        min_i = p0
-        max_i = p1
-    else:
-        min_i = p1
-        max_i = p0
-	rad = fey * 0.5 + fex * 0.5
-    if(min_i > rad or max_i < -rad):
-        return False
-
-
-    fex = abs(e2[0])
-    fey = abs(e2[1])
-    fez = abs(e2[2])
-    #X2
-    p0 = e2[2]*v0[1] - e2[1]*v0[2]
-    p1 = e2[2]*v1[1] - e2[1]*v1[2]
-    if(p0<p1):
-        min_i = p0
-        max_i = p1
-    else:
-        min_i = p1
-        max_i = p0
-    rad = fez * 0.5 + fey * 0.5
-    if (min_i > rad or max_i < -rad):
-        return False
-    #Y1
-    p0 = -e2[2]*v0[0] + e2[0]*v0[2]
-    p2 = -e2[2]*v1[0] + e2[0]*v1[2]
-    if(p0<p2):
-        min_i = p0
-        max_i = p2
-    else:
-        min_i = p2
-        max_i = p0
-    rad = fez * 0.5 + fex * 0.5
-    if(min_i>rad or max_i<-rad):
-        return False
-    #Z12
-    p1 = e2[1]*v1[0] - e2[0]*v1[1]
-    p2 = e2[1]*v2[0] - e2[0]*v2[1]
-    if(p2<p1):
-        min_i = p2
-        max_i = p1
-    else:
-        min_i = p1
-        max_i = p2
-    rad = fey * 0.5 + fex * 0.5
-    if(min_i>rad or max_i<-rad):
-        return False
-
-
-    # Bullet point 1)
-    #  first test overlap in the {x,y,z}-directions
-    #  find min, max of the triangle each direction, and test for overlap in
-    #  that direction -- this is equivalent to testing a minimal AABB around
-    #  the triangle against the AABB
-    min_0 = min([v0[0], v1[0], v2[0]])
-    max_0 = max([v0[0], v1[0], v2[0]])
-    if(min_0 > 0.5 or max_0 < -0.5):
-        return False
-
-    min_1 = min([v0[1], v1[1], v2[1]])
-    max_1 = max([v0[1], v1[1], v2[1]])
-    if(min_1 > 0.5 or max_1 < -0.5):
-        return False
-
-    min_2 = min([v0[2], v1[2], v2[2]])
-    max_2 = max([v0[2], v1[2], v2[2]])
-    if(min_2 > 0.5 or max_2 < -0.5):
-        return False
-
-    # Bullet 2)
-    # test if box intersects plane of the triangle
-    normal = np.cross(e0, e1)
-
-    vmin = np.sign(normal) * (-0.5) - v0
-    vmax = np.sign(normal) * -0.5 - v0
-
-    intersect_normal = False
-
-    if np.dot(normal, vmin) > 0.0:
-        intersect_normal = False
-    elif np.dot(normal, vmax) >= 0.0:
-        intersect_normal = True
-    else:
-        intersect_normal = False
-
-    if not intersect_normal:
-        return False
-
-    return True #Box and triangle overlap
-
 
 # Filename and resolution. Assume cube?
 def calculate_voxels_from_off(filename, res):

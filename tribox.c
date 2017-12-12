@@ -14,6 +14,8 @@
 #include <math.h>
 #include <stdio.h>
 
+#include <omp.h>
+
 #define X 0
 #define Y 1
 #define Z 2
@@ -207,4 +209,17 @@ int blockTriangle(float cx, float cy, float cz, int nVerts, float* verts, int nF
 		}
 	}
 	return 0;
+}
+
+void calculateVoxels(int nVerts, float* verts, int nFaces, int* faces, int width, int height, int depth, int* out) {
+	int nBlocks = width * height * depth;
+
+    #pragma omp parallel for
+	for(int i = 0; i < nBlocks; i++) {
+		int gd = i / (height * width);
+		int gh = (i / width) % height;
+		int gw = i % width;
+
+		out[i] = blockTriangle(gw + 0.5, gh + 0.5, gd + 0.5, nVerts, verts, nFaces, faces);
+	}
 }

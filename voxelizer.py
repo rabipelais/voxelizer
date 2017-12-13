@@ -101,12 +101,15 @@ def write_grid(filename, grid, width, height, depth):
 
 
 def read_grid(filename):
+    """
+    Return a numpy array with shape (width, height, depth).
+    """
     with open(filename) as fp:
         width, height, depth = tuple(
             [int(s) for s in fp.readline().strip().split(' ')])
-        array = fp.readline().strip()
+        array = fp.readline().strip().split(' ')
 
         grid = np.array(array)
-        grid.reshape(width, height, depth)
+        grid = grid.reshape((width, height, depth))
 
         return grid

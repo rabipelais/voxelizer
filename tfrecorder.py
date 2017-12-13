@@ -55,25 +55,58 @@ def one_hot(indices, cats):
     return np.array(one_hots)
 
 
-def _floats_feature(value):
-    return tf.train.Feature(bytes_list=tf.train.FloatList(value=[value]))
+def _float_feature_list(value):
+    return tf.train.Feature(float_list=tf.train.FloatList(value=value))
 
 
 def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
 
+def _int64_feature_list(value):
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+
+
 if __name__ == '__main__':
     dir_name = sys.argv[1]
     train_set, test_set, labels_dict = read_data(dir_name)
 
+    # Write training data
     train_writer = tf.python_io.TFRecordWriter(
         os.path.join(dir_name, "training.tfrecord"))
+    for data, label in train_set:
+        (width, height, depth) = data.shape
+        example = tf.train.Example(features=tf.train.Features(feature={
+            'width': _int64_feature(width),
+            'height': _int64_feature(height),
+            'depth': _int64_feature(depth),
+            'data': _float_feature_list(data.ravel()),
+            'label_one_hot': _int64_feature_list(label)}))
+        train_writer.write(example.SerializeToString())
+
+    # Write test data
+    test_writer = tf.python_io.TFRecordWriter(
+        os.path.join(dir_name, "test.tfrecord"))
     for data, label in test_set:
         (width, height, depth) = data.shape
         example = tf.train.Example(features=tf.train.Features(feature={
             'width': _int64_feature(width),
             'height': _int64_feature(height),
             'depth': _int64_feature(depth),
-            'data': _floats_feature(data),
-            'label_one_hot': _int64_feature()}))
+            'data': _float_feature_list(data.ravel()),
+            'label_one_hot': _int64_feature_list(label)}))
+        test_writer.write(example.SerializeToString())
+
+    # for serialized_example in tf.python_io.tf_record_iterator(test_records):
+    #    example = tf.train.Example()
+    #    example.ParseFromString(serialized_example)
+    #    height = np.array(example.features.feature['height'].int64_list.value)
+    #    data = np.array(example.features.feature['data'].float_list.value)
+
+    # Write labels dictionary
+    labels_file = os.path.join(dir_name, "labels.txt")
+    with open(labels_file, 'w') as file_handle:
+        for cat in labels_dict:
+            file_handle.write(cat + " ")
+            file_handle.write(str(labels_dict[cat]))
+            file_handle.write("\n")

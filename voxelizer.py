@@ -109,7 +109,7 @@ def read_grid(filename):
             [int(s) for s in fp.readline().strip().split(' ')])
         array = fp.readline().strip().split(' ')
 
-        grid = np.array(array)
+        grid = np.array(array, dtype=np.float)
         grid = grid.reshape((width, height, depth))
 
         return grid

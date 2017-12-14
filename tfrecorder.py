@@ -49,7 +49,7 @@ def read_data(dir):
 def one_hot(indices, cats):
     one_hots = []
     for i in indices:
-        hotty = np.zeros(cats, dtype=np.int)
+        hotty = np.zeros(cats, dtype=np.int64)
         hotty[i] = 1
         one_hots.append(hotty)
     return np.array(one_hots)
@@ -57,6 +57,10 @@ def one_hot(indices, cats):
 
 def _float_feature_list(value):
     return tf.train.Feature(float_list=tf.train.FloatList(value=value))
+
+
+def _bytes_feature(value):
+    return tf.train.Feature(bytes_list=tf.trainBytesList(value=value))
 
 
 def _int64_feature(value):
@@ -101,7 +105,7 @@ if __name__ == '__main__':
     #    example = tf.train.Example()
     #    example.ParseFromString(serialized_example)
     #    height = np.array(example.features.feature['height'].int64_list.value)
-    #    data = np.array(example.features.feature['data'].float_list.value)
+    #   data = np.array(example.features.feature['data'].float_list.value)
 
     # Write labels dictionary
     labels_file = os.path.join(dir_name, "labels.txt")

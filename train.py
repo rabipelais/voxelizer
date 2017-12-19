@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import math
 import os
 import sys
 from functools import partial
@@ -62,8 +63,20 @@ def build_graph(x, y_, res):
     with tf.name_scope('reshape'):
         x_voxel = tf.reshape(x, [-1, res, res, res, 1])
 
-    h_conv1 = conv_layer(x_voxel, 1, 8, "conv1")
-    h_pool1 = pooling_layer(h_conv1, 'pool1')
+    h_conv1_1 = conv_layer(x_voxel, 1, 8, "conv1_1")
+    h_conv1_2 = conv_layer(h_conv1_1, 8, 8, "conv1_2")
+    h_pool_1 = pooling_layer(h_conv1_2, 'pool1')
+
+    h_from_prev = h_pool_1
+
+    for block in range(math.log(res, 2) - 3):
+        input_dim = 8 + block * 6
+        output_dim = input_dim + 6
+        h_conv_1 = conv_layer(h_from_prev, input_dim,
+                              output_dim, "conv" + str(block + 1) + "_1")
+        h_conv_2 = conv_layer(h_conv_1, output_dim,
+                              output_dim, "conv" + str(block + 1) + "_2")
+        h_pool = pooling_layer(h_conv_2, 'pool1')
 
     h_conv2 = conv_layer(h_pool1, 8, 14, "conv2")
     h_pool2 = pooling_layer(h_conv2, "pool2")
@@ -137,71 +150,21 @@ def build_graph(x, y_, res):
 
     learning_rate = 0.1
     with tf.name_scope("train"):
-        train_step = tf.train.AdamOptimizer(0.1).minimize(cross_entropy)
+        train_step = tf.train.AdamOptimizer(
+            learning_rate).minimize(cross_entropy)
 
+    cat_predicted = tf.argmax(y_readout, 1)
+    cat_label = tf.argmax(y_, 0)
     with tf.name_scope('accuracy'):
         with tf.name_scope("correct_prediction"):
-            correct_prediction = tf.equal(
-                tf.arg_max(y_readout, 1), tf.arg_max(y_, 1))
+            correct_prediction = tf.equal(cat_predicted, cat_label)
         with tf.name_scope("accuracy"):
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     tf.summary.scalar("accuracy", accuracy)
 
     merged = tf.summary.merge_all()
 
-    return y_readout, merged
-
-
-def main(_):
-    # Import data
-    data_list, labels_one_hot = read_data()
-
-    # Create the model
-    x = tf.placeholder(tf.float32, [None, vx_width * vx_height * vx_depth])
-
-    # Define loss and optimizer
-    y_ = tf.placeholder(tf.float32, [None, 10])
-
-    # Build the graph for the deep net
-    y_conv, keep_prob = build_graph(x)
-
-    with tf.name_scope('loss'):
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(labels=y_,
-                                                                logits=y_conv)
-    cross_entropy = tf.reduce_mean(cross_entropy)
-
-    with tf.name_scope('adam_optimizer'):
-        train_step = tf.train.AdamOptimizer(1e-4).minimize(cross_entropy)
-
-    with tf.name_scope('accuracy'):
-        correct_prediction = tf.equal(tf.argmax(y_conv, 1), tf.argmax(y_, 1))
-        correct_prediction = tf.cast(correct_prediction, tf.float32)
-    accuracy = tf.reduce_mean(correct_prediction)
-
-    graph_location = tempfile.mkdtemp()
-    print('Saving graph to: %s' % graph_location)
-    train_writer = tf.summary.FileWriter(graph_location)
-    train_writer.add_graph(tf.get_default_graph())
-
-    dataset = tf.data.Dataset.from_tensor_slices((data_list, labels_one_hot))
-
-    dataset = dataset.shuffle(buffer_size=10000)
-    dataset = dataset.batch(32)
-    dataset = dataset.repeat()
-
-    iterator = dataset.make_one_shot_iterator()
-
-    next_example, next_label = iterator.get_next()
-
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        for i in range(100):  # Number of epochs
-            if i % 100 == 0:
-                train_accuracy = accuracy.eval(feed_dict={
-                    x: batch[0], y_: batch[1], keep_prob: 1.0})
-                print('step %d, training accuracy %g' % (i, train_accuracy))
-            train_step.run(
-                feed_dict={x: batch[0], y_: batch[1], keep_prob: 0.5})
+    return train_step, accuracy, merged, cat_predicted, cat_label, keep_prob
 
 
 def parse_function(width, height, depth, record):
@@ -221,22 +184,88 @@ def parse_function(width, height, depth, record):
     return parsed_features['data'], dense_labels
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
+def main():
     batch_size = 10
     shuffle_size = 10000
     dir_name = sys.argv[1]
-    res = sys.argv[2]
+    res = int(sys.argv[2])
+    num_epochs = 4
 
-    training_records = os.path.join(dir_name, "test.tfrecord")
+    training_records = os.path.join(dir_name, "training.tfrecord")
+    test_records = os.path.join(dir_name, "test.tfrecord")
 
     dataset = tf.data.TFRecordDataset([training_records])
     dataset = dataset.map(partial(parse_function, res, res, res))
     dataset = dataset.shuffle(shuffle_size)
-    dataset = dataset.repeat()
     dataset = dataset.batch(batch_size)
 
-    features, labels = dataset.make_one_shot_iterator().get_next()
+    test_dataset = tf.data.TFRecordDataset([test_records])
+
+    handle = tf.placeholder(tf.string, shape=[])
+    iterator = tf.data.Iterator.from_string_handle(
+        handle, dataset.output_types, dataset.output_shapes)
+
+    next_element, next_label = iterator.get_next()
+
+    training_iterator = dataset.make_initializable_iterator()
+    validation_iterator = test_dataset.make_initializable_iterator()
+
+    train_step, merged, accuracy, predicted, label, keep_prob = build_graph(
+        next_element, next_label, res)
 
     with tf.Session() as sess:
-        f_data, l_data = sess.run([features, labels])
-        print(f_data, l_data)
+        train_writer = tf.summary.FileWriter(
+            os.path.join(dir_name, "train"), sess.graph)
+        test_writer = tf.summary.FileWriter(
+            os.path.join(dir_name, "test"), sess.graph)
+
+        training_handle = sess.run(training_iterator.string_handle())
+        validation_handle = sess.run(validation_iterator.string_handle())
+
+        tf.global_variables_initializer().run()
+
+        for epoch in range(num_epochs):
+            sess.run(training_iterator.initializer)
+            step = -1
+            print("Epoch: " + str(epoch))
+            while True:
+                print(" - Step: " + str(step))
+                try:
+                    if step % 10 == 0:  # Record summaries and test-set accuracy
+                        step += 1
+                        sess.run(validation_iterator.initializer)
+                        # Run the whole thing
+                        while True:
+                            try:
+                                summary, acc = sess.run([merged, accuracy], feed_dict={
+                                                        handle: validation_handle, keep_prob: 1.0})
+                                print('Accuracy at step %s: %s' % (step, acc))
+                                # TODO: WRITE OUT
+                                test_writer.add_summary(
+                                    summary, epoch * 10000 + step)
+                            except tf.errors.OutOfRangeError:
+                                break
+                    else:  # Record train set data summaries and train
+                        step += 1
+                        if step % 100 == 99:  # Record execution stats
+                            run_options = tf.RunOptions(
+                                trace_level=tf.RunOptions.FULL_TRACE)
+                            run_metadata = tf.RunMetadata()
+                            summary, _ = sess.run([merged, train_step],
+                                                  feed_dict={handle: training_handle, keep_prob: 0.5})
+                            train_writer.add_run_metadata(
+                                run_metadata, 'step%10d' % epoch * 10000 + step)
+                            train_writer.add_summary(
+                                summary, epoch * 10000 + step)
+                        else:  # Record a summary
+                            summary, _ = sess.run([merged, train_step], feed_dict={
+                                                  handle: training_handle, keep_prob: 0.5})
+                            train_writer.add_summary(
+                                summary, epoch * 10000 + step)
+                except tf.errors.OutOfRangeError:
+                    break
+
+
+if __name__ == "__main__":
+    main()

@@ -69,47 +69,27 @@ def build_graph(x, y_, res):
 
     h_from_prev = h_pool_1
 
-    for block in range(math.log(res, 2) - 3):
+    output_dim = 8
+    for block in range(int(math.log(res, 2)) - 4):
         input_dim = 8 + block * 6
         output_dim = input_dim + 6
         h_conv_1 = conv_layer(h_from_prev, input_dim,
                               output_dim, "conv" + str(block + 1) + "_1")
         h_conv_2 = conv_layer(h_conv_1, output_dim,
                               output_dim, "conv" + str(block + 1) + "_2")
-        h_pool = pooling_layer(h_conv_2, 'pool1')
-
-    h_conv2 = conv_layer(h_pool1, 8, 14, "conv2")
-    h_pool2 = pooling_layer(h_conv2, "pool2")
-
-    h_conv3 = conv_layer(h_pool2, 14, 14, "conv3")
-    h_pool3 = pooling_layer(h_conv3, "pool3")
-
-    h_conv4 = conv_layer(h_pool3, 14, 20, "conv4")
-    h_pool4 = pooling_layer(h_conv4, "pool4")
-
-    h_conv5 = conv_layer(h_pool4, 20, 20, "conv5")
-    h_pool5 = pooling_layer(h_conv5, "pool5")
-
-    h_conv6 = conv_layer(h_pool5, 20, 26, "conv6")
-    h_pool6 = pooling_layer(h_conv6, "pool6")
-
-    h_conv7 = conv_layer(h_pool6, 26, 26, "conv7")
-    h_conv8 = conv_layer(h_conv7, 26, 32, "conv8")
-    h_conv9 = conv_layer(h_conv8, 32, 32, "conv9")
-    h_conv10 = conv_layer(h_conv9, 32, 32, "conv10")
-
-    h_pool10 = pooling_layer(h_conv10, 'pool10')
+        h_pool = pooling_layer(h_conv_2, 'pool1' + str(block + 1))
+        h_from_prev = h_pool
 
     # Reshape and fully connected
     with tf.name_scope('dropout'):
-        h_pool10_flat = tf.reshape(h_pool10, [-1, 32 * 8 * 8 * 8])
+        h_pool10_flat = tf.reshape(h_from_prev, [1, output_dim * 8 * 8 * 8])
         # To be able to turn it off during testing
         keep_prob = tf.placeholder(tf.float32)
         h_pool_drop = tf.nn.dropout(h_pool10_flat, keep_prob)
 
     with tf.name_scope('fully_connected'):
         with tf.name_scope('weights'):
-            W_fc1 = weight_variable([32 * 8 * 8 * 8, 512])
+            W_fc1 = weight_variable([output_dim * 8 * 8 * 8, 512])
             variable_summaries(W_fc1)
         with tf.name_scope('biases'):
             b_fc1 = bias_variable([512])
@@ -164,7 +144,7 @@ def build_graph(x, y_, res):
 
     merged = tf.summary.merge_all()
 
-    return train_step, accuracy, merged, cat_predicted, cat_label, keep_prob
+    return train_step, merged, accuracy, cat_predicted, cat_label, keep_prob
 
 
 def parse_function(width, height, depth, record):
@@ -173,15 +153,18 @@ def parse_function(width, height, depth, record):
         'height': tf.FixedLenFeature((), tf.int64),
         'depth': tf.FixedLenFeature((), tf.int64),
         'data': tf.FixedLenFeature((width, height, depth), tf.float32),
-        'label_one_hot': tf.VarLenFeature(tf.int64)
+        'label_one_hot': tf.FixedLenFeature((10), tf.int64)  # TODO
     }
 
     parsed_features = tf.parse_single_example(record, features)
     width = parsed_features['width']
     height = parsed_features['height']
     depth = parsed_features['depth']
-    dense_labels = tf.sparse_tensor_to_dense(parsed_features['label_one_hot'])
-    return parsed_features['data'], dense_labels
+    #dense_labels = tf.sparse_tensor_to_dense(parsed_features['label_one_hot'])
+    # print "parsing: "
+    # print dense_labels.get_shape()
+    #dense_labels = tf.reshape(dense_labels)
+    return parsed_features['data'], parsed_features['label_one_hot']
 
 
 # if __name__ == '__main__':
@@ -197,10 +180,11 @@ def main():
 
     dataset = tf.data.TFRecordDataset([training_records])
     dataset = dataset.map(partial(parse_function, res, res, res))
-    dataset = dataset.shuffle(shuffle_size)
-    dataset = dataset.batch(batch_size)
+    #dataset = dataset.shuffle(shuffle_size)
+    #dataset = dataset.batch(batch_size)
 
     test_dataset = tf.data.TFRecordDataset([test_records])
+    test_dataset = test_dataset.map(partial(parse_function, res, res, res))
 
     handle = tf.placeholder(tf.string, shape=[])
     iterator = tf.data.Iterator.from_string_handle(
@@ -230,24 +214,19 @@ def main():
             step = -1
             print("Epoch: " + str(epoch))
             while True:
-                print(" - Step: " + str(step))
+                step += 1
+                if (step % 25 == 0):
+                    print(" - Step: " + str(step))
                 try:
                     if step % 10 == 0:  # Record summaries and test-set accuracy
-                        step += 1
                         sess.run(validation_iterator.initializer)
                         # Run the whole thing
-                        while True:
-                            try:
-                                summary, acc = sess.run([merged, accuracy], feed_dict={
-                                                        handle: validation_handle, keep_prob: 1.0})
-                                print('Accuracy at step %s: %s' % (step, acc))
-                                # TODO: WRITE OUT
-                                test_writer.add_summary(
-                                    summary, epoch * 10000 + step)
-                            except tf.errors.OutOfRangeError:
-                                break
+                        summary, acc = sess.run([merged, accuracy], feed_dict={
+                            handle: validation_handle, keep_prob: 1.0})
+                        print('Accuracy at step %s: %s' % (step, acc))
+                        test_writer.add_summary(
+                            summary, epoch * 10000 + step)
                     else:  # Record train set data summaries and train
-                        step += 1
                         if step % 100 == 99:  # Record execution stats
                             run_options = tf.RunOptions(
                                 trace_level=tf.RunOptions.FULL_TRACE)
@@ -255,7 +234,7 @@ def main():
                             summary, _ = sess.run([merged, train_step],
                                                   feed_dict={handle: training_handle, keep_prob: 0.5})
                             train_writer.add_run_metadata(
-                                run_metadata, 'step%10d' % epoch * 10000 + step)
+                                run_metadata, 'step%10d' % (epoch * 10000 + step))
                             train_writer.add_summary(
                                 summary, epoch * 10000 + step)
                         else:  # Record a summary

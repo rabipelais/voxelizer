@@ -80,9 +80,9 @@ def parse_function(width, height, depth, record):
 
 
 def train(dir_name, res):
-    batch_size = 20
+    batch_size = 32
     shuffle_size = 10000
-    num_epochs = 20
+    num_epochs = 12
 
     training_records = os.path.join(dir_name, "training.tfrecord")
     test_records = os.path.join(dir_name, "test.tfrecord")
@@ -94,6 +94,8 @@ def train(dir_name, res):
 
     test_dataset = tf.data.TFRecordDataset([test_records])
     test_dataset = test_dataset.map(partial(parse_function, res, res, res))
+    test_dataset = test_dataset.shuffle(shuffle_size)
+    test_dataset = test_dataset.batch(64)
 
     handle = tf.placeholder(tf.string, shape=[])
     iterator = tf.data.Iterator.from_string_handle(
@@ -181,7 +183,7 @@ def train(dir_name, res):
             cross_entropy = tf.reduce_mean(diff)
     tf.summary.scalar("cross_entropy", cross_entropy)
 
-    learning_rate = 0.1
+    learning_rate = 0.001
     with tf.name_scope("train"):
         train_step = tf.train.AdamOptimizer(
             learning_rate).minimize(cross_entropy)
@@ -236,14 +238,13 @@ def train(dir_name, res):
                 print(" - Step: " + str(step))
             try:
                 if step % 10 == 0:  # Record summaries and test-set accuracy
-                    a = 1
-                    # sess.run(validation_iterator.initializer)
-                    # # Run the whole thing
-                    # summary, acc = sess.run([merged, accuracy], feed_dict={
-                    #     handle: validation_handle, keep_prob: 1.0})
-                    # print('Accuracy at step %s: %s' % (step, acc))
-                    # test_writer.add_summary(
-                    #     summary, epoch * 10000 + step)
+                    sess.run(validation_iterator.initializer)
+                    # Run the whole thing
+                    summary, acc = sess.run([merged, accuracy], feed_dict={
+                        handle: validation_handle, keep_prob: 1.0})
+                    print('Accuracy at step %s: %s' % (step, acc))
+                    test_writer.add_summary(
+                        summary, total_steps + step)
                 else:  # Record train set data summaries and train
                     if step % 100 == 99:  # Record execution stats
                         run_options = tf.RunOptions(

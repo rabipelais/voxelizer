@@ -59,7 +59,75 @@ def pooling_layer(input_tensor, layer_name):
     return pooled
 
 
-def build_graph(x, y_, res):
+def parse_function(width, height, depth, record):
+    features = {
+        'width': tf.FixedLenFeature((), tf.int64),
+        'height': tf.FixedLenFeature((), tf.int64),
+        'depth': tf.FixedLenFeature((), tf.int64),
+        'data': tf.FixedLenFeature((width, height, depth), tf.float32),
+        'label_one_hot': tf.FixedLenFeature((10), tf.int64)  # TODO
+    }
+
+    parsed_features = tf.parse_single_example(record, features)
+    width = parsed_features['width']
+    height = parsed_features['height']
+    depth = parsed_features['depth']
+    #dense_labels = tf.sparse_tensor_to_dense(parsed_features['label_one_hot'])
+    # print "parsing: "
+    # print dense_labels.get_shape()
+    #dense_labels = tf.reshape(dense_labels)
+    return parsed_features['data'], parsed_features['label_one_hot']
+
+
+def main():
+    dir_name = sys.argv[1]
+    res = int(sys.argv[2])
+    train(dir_name, res)
+
+
+if __name__ == "__main__":
+    main()
+
+
+def train(dir_name, res):
+    batch_size = 200
+    shuffle_size = 10000
+    num_epochs = 1
+
+    training_records = os.path.join(dir_name, "training.tfrecord")
+    test_records = os.path.join(dir_name, "test.tfrecord")
+
+    dataset = tf.data.TFRecordDataset([training_records])
+    dataset = dataset.map(partial(parse_function, res, res, res))
+    #dataset = dataset.shuffle(shuffle_size)
+    #dataset = dataset.batch(batch_size)
+
+    test_dataset = tf.data.TFRecordDataset([test_records])
+    test_dataset = test_dataset.map(partial(parse_function, res, res, res))
+
+    handle = tf.placeholder(tf.string, shape=[])
+    iterator = tf.data.Iterator.from_string_handle(
+        handle, dataset.output_types, dataset.output_shapes)
+
+    next_element, next_label = iterator.get_next()
+
+    training_iterator = dataset.make_initializable_iterator()
+    validation_iterator = test_dataset.make_initializable_iterator()
+
+    sess = tf.InteractiveSession()
+
+    train_writer = tf.summary.FileWriter(
+        os.path.join(dir_name, "train"), sess.graph)
+    test_writer = tf.summary.FileWriter(
+        os.path.join(dir_name, "test"), sess.graph)
+
+    training_handle = sess.run(training_iterator.string_handle())
+    validation_handle = sess.run(validation_iterator.string_handle())
+
+    x = next_element
+    y_ = next_label
+
+    # BUILD GRAPH
     with tf.name_scope('reshape'):
         x_voxel = tf.reshape(x, [-1, res, res, res, 1])
 
@@ -144,107 +212,41 @@ def build_graph(x, y_, res):
 
     merged = tf.summary.merge_all()
 
-    return train_step, merged, accuracy, cat_predicted, cat_label, keep_prob
+    # RUN THE TRAINING LOOPY LOOP
+    tf.global_variables_initializer().run()
 
-
-def parse_function(width, height, depth, record):
-    features = {
-        'width': tf.FixedLenFeature((), tf.int64),
-        'height': tf.FixedLenFeature((), tf.int64),
-        'depth': tf.FixedLenFeature((), tf.int64),
-        'data': tf.FixedLenFeature((width, height, depth), tf.float32),
-        'label_one_hot': tf.FixedLenFeature((10), tf.int64)  # TODO
-    }
-
-    parsed_features = tf.parse_single_example(record, features)
-    width = parsed_features['width']
-    height = parsed_features['height']
-    depth = parsed_features['depth']
-    #dense_labels = tf.sparse_tensor_to_dense(parsed_features['label_one_hot'])
-    # print "parsing: "
-    # print dense_labels.get_shape()
-    #dense_labels = tf.reshape(dense_labels)
-    return parsed_features['data'], parsed_features['label_one_hot']
-
-
-# if __name__ == '__main__':
-def main():
-    batch_size = 10
-    shuffle_size = 10000
-    dir_name = sys.argv[1]
-    res = int(sys.argv[2])
-    num_epochs = 4
-
-    training_records = os.path.join(dir_name, "training.tfrecord")
-    test_records = os.path.join(dir_name, "test.tfrecord")
-
-    dataset = tf.data.TFRecordDataset([training_records])
-    dataset = dataset.map(partial(parse_function, res, res, res))
-    #dataset = dataset.shuffle(shuffle_size)
-    #dataset = dataset.batch(batch_size)
-
-    test_dataset = tf.data.TFRecordDataset([test_records])
-    test_dataset = test_dataset.map(partial(parse_function, res, res, res))
-
-    handle = tf.placeholder(tf.string, shape=[])
-    iterator = tf.data.Iterator.from_string_handle(
-        handle, dataset.output_types, dataset.output_shapes)
-
-    next_element, next_label = iterator.get_next()
-
-    training_iterator = dataset.make_initializable_iterator()
-    validation_iterator = test_dataset.make_initializable_iterator()
-
-    train_step, merged, accuracy, predicted, label, keep_prob = build_graph(
-        next_element, next_label, res)
-
-    with tf.Session() as sess:
-        train_writer = tf.summary.FileWriter(
-            os.path.join(dir_name, "train"), sess.graph)
-        test_writer = tf.summary.FileWriter(
-            os.path.join(dir_name, "test"), sess.graph)
-
-        training_handle = sess.run(training_iterator.string_handle())
-        validation_handle = sess.run(validation_iterator.string_handle())
-
-        tf.global_variables_initializer().run()
-
-        for epoch in range(num_epochs):
-            sess.run(training_iterator.initializer)
-            step = -1
-            print("Epoch: " + str(epoch))
-            while True:
-                step += 1
-                if (step % 25 == 0):
-                    print(" - Step: " + str(step))
-                try:
-                    if step % 10 == 0:  # Record summaries and test-set accuracy
-                        sess.run(validation_iterator.initializer)
-                        # Run the whole thing
-                        summary, acc = sess.run([merged, accuracy], feed_dict={
-                            handle: validation_handle, keep_prob: 1.0})
-                        print('Accuracy at step %s: %s' % (step, acc))
-                        test_writer.add_summary(
-                            summary, epoch * 10000 + step)
-                    else:  # Record train set data summaries and train
-                        if step % 100 == 99:  # Record execution stats
-                            run_options = tf.RunOptions(
-                                trace_level=tf.RunOptions.FULL_TRACE)
-                            run_metadata = tf.RunMetadata()
-                            summary, _ = sess.run([merged, train_step],
-                                                  feed_dict={handle: training_handle, keep_prob: 0.5})
-                            train_writer.add_run_metadata(
-                                run_metadata, 'step%10d' % (epoch * 10000 + step))
-                            train_writer.add_summary(
-                                summary, epoch * 10000 + step)
-                        else:  # Record a summary
-                            summary, _ = sess.run([merged, train_step], feed_dict={
-                                                  handle: training_handle, keep_prob: 0.5})
-                            train_writer.add_summary(
-                                summary, epoch * 10000 + step)
-                except tf.errors.OutOfRangeError:
-                    break
-
-
-if __name__ == "__main__":
-    main()
+    for epoch in range(num_epochs):
+        sess.run(training_iterator.initializer)
+        step = -1
+        print("Epoch: " + str(epoch))
+        while True:
+            step += 1
+            if (step % 25 == 0):
+                print(" - Step: " + str(step))
+            try:
+                if step % 10 == 0:  # Record summaries and test-set accuracy
+                    sess.run(validation_iterator.initializer)
+                    # Run the whole thing
+                    summary, acc = sess.run([merged, accuracy], feed_dict={
+                        handle: validation_handle, keep_prob: 1.0})
+                    print('Accuracy at step %s: %s' % (step, acc))
+                    test_writer.add_summary(
+                        summary, epoch * 10000 + step)
+                else:  # Record train set data summaries and train
+                    if step % 100 == 99:  # Record execution stats
+                        run_options = tf.RunOptions(
+                            trace_level=tf.RunOptions.FULL_TRACE)
+                        run_metadata = tf.RunMetadata()
+                        summary, _ = sess.run([merged, train_step],
+                                              feed_dict={handle: training_handle, keep_prob: 0.5})
+                        train_writer.add_run_metadata(
+                            run_metadata, 'epoch%10d step%10d' % (epoch, step))
+                        train_writer.add_summary(
+                            summary, epoch * 6104 + step)
+                    else:  # Record a summary
+                        summary, _ = sess.run([merged, train_step], feed_dict={
+                                              handle: training_handle, keep_prob: 0.5})
+                        train_writer.add_summary(
+                            summary, epoch * 6104 + step)
+            except tf.errors.OutOfRangeError:
+                break

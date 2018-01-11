@@ -80,7 +80,7 @@ def parse_function(width, height, depth, record):
 
 
 def train(dir_name, res):
-    batch_size = 2
+    batch_size = 20
     shuffle_size = 10000
     num_epochs = 1
 
@@ -89,7 +89,7 @@ def train(dir_name, res):
 
     dataset = tf.data.TFRecordDataset([training_records])
     dataset = dataset.map(partial(parse_function, res, res, res))
-    #dataset = dataset.shuffle(shuffle_size)
+    dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch_size)
 
     test_dataset = tf.data.TFRecordDataset([test_records])
@@ -105,11 +105,6 @@ def train(dir_name, res):
     validation_iterator = test_dataset.make_initializable_iterator()
 
     sess = tf.InteractiveSession()
-
-    train_writer = tf.summary.FileWriter(
-        os.path.join(dir_name, "train"), sess.graph)
-    test_writer = tf.summary.FileWriter(
-        os.path.join(dir_name, "test"), sess.graph)
 
     training_handle = sess.run(training_iterator.string_handle())
     validation_handle = sess.run(validation_iterator.string_handle())
@@ -191,8 +186,8 @@ def train(dir_name, res):
         train_step = tf.train.AdamOptimizer(
             learning_rate).minimize(cross_entropy)
 
-    cat_predicted = tf.argmax(y_readout, 0)
-    cat_label = tf.argmax(y_, 0)
+    cat_predicted = tf.argmax(y_readout, 1)
+    cat_label = tf.argmax(y_, 1)
     with tf.name_scope('accuracy'):
         with tf.name_scope("correct_prediction"):
             correct_prediction = tf.equal(cat_predicted, cat_label)
@@ -200,7 +195,32 @@ def train(dir_name, res):
             accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
     tf.summary.scalar("accuracy", accuracy)
 
+    with tf.name_scope("confusion_matrix"):
+        num_classes = 10
+        # Compute a per-batch confusion
+        batch_confusion = tf.confusion_matrix(cat_label, cat_predicted,
+                                              num_classes=num_classes,
+                                              name='batch_confusion')
+
+        # Create an accumulator variable to hold the counts
+        confusion = tf.Variable(tf.zeros([num_classes, num_classes],
+                                         dtype=tf.int32),
+                                name='confusion')
+        # Create the update op for doing a "+=" accumulation on the batch
+        confusion_update = confusion.assign(confusion + batch_confusion)
+
+        # Cast counts to float so tf.summary.image renormalizes to [0,255]
+        confusion_image = tf.reshape(tf.cast(confusion, tf.float32),
+                                     [1, num_classes, num_classes, 1])
+
+    tf.summary.image('confusion', confusion_image)
+
     merged = tf.summary.merge_all()
+
+    train_writer = tf.summary.FileWriter(
+        os.path.join(dir_name, "train"), sess.graph)
+    test_writer = tf.summary.FileWriter(
+        os.path.join(dir_name, "test"), sess.graph)
 
     # RUN THE TRAINING LOOPY LOOP
     tf.global_variables_initializer().run()
@@ -233,10 +253,11 @@ def train(dir_name, res):
                         train_writer.add_run_metadata(
                             run_metadata, 'epoch%10d step%10d' % (epoch, step))
                         train_writer.add_summary(
-                            summary, epoch * 6104 + step)
+                            summary, epoch * 6104 / batch_size + step)
                     else:  # Record a summary
-                        summary, _ = sess.run([merged, train_step], feed_dict={
-                                              handle: training_handle, keep_prob: 0.5})
+                        summary, _, _ = sess.run([merged, train_step, confusion_update], feed_dict={
+                            handle: training_handle, keep_prob: 0.5})
+
                         train_writer.add_summary(
                             summary, epoch * 6104 + step)
             except tf.errors.OutOfRangeError:

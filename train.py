@@ -79,18 +79,8 @@ def parse_function(width, height, depth, record):
     return parsed_features['data'], parsed_features['label_one_hot']
 
 
-def main():
-    dir_name = sys.argv[1]
-    res = int(sys.argv[2])
-    train(dir_name, res)
-
-
-if __name__ == "__main__":
-    main()
-
-
 def train(dir_name, res):
-    batch_size = 200
+    batch_size = 2
     shuffle_size = 10000
     num_epochs = 1
 
@@ -100,7 +90,7 @@ def train(dir_name, res):
     dataset = tf.data.TFRecordDataset([training_records])
     dataset = dataset.map(partial(parse_function, res, res, res))
     #dataset = dataset.shuffle(shuffle_size)
-    #dataset = dataset.batch(batch_size)
+    dataset = dataset.batch(batch_size)
 
     test_dataset = tf.data.TFRecordDataset([test_records])
     test_dataset = test_dataset.map(partial(parse_function, res, res, res))
@@ -150,7 +140,7 @@ def train(dir_name, res):
 
     # Reshape and fully connected
     with tf.name_scope('dropout'):
-        h_pool10_flat = tf.reshape(h_from_prev, [1, output_dim * 8 * 8 * 8])
+        h_pool10_flat = tf.reshape(h_from_prev, [-1, output_dim * 8 * 8 * 8])
         # To be able to turn it off during testing
         keep_prob = tf.placeholder(tf.float32)
         h_pool_drop = tf.nn.dropout(h_pool10_flat, keep_prob)
@@ -201,7 +191,7 @@ def train(dir_name, res):
         train_step = tf.train.AdamOptimizer(
             learning_rate).minimize(cross_entropy)
 
-    cat_predicted = tf.argmax(y_readout, 1)
+    cat_predicted = tf.argmax(y_readout, 0)
     cat_label = tf.argmax(y_, 0)
     with tf.name_scope('accuracy'):
         with tf.name_scope("correct_prediction"):
@@ -225,13 +215,14 @@ def train(dir_name, res):
                 print(" - Step: " + str(step))
             try:
                 if step % 10 == 0:  # Record summaries and test-set accuracy
-                    sess.run(validation_iterator.initializer)
-                    # Run the whole thing
-                    summary, acc = sess.run([merged, accuracy], feed_dict={
-                        handle: validation_handle, keep_prob: 1.0})
-                    print('Accuracy at step %s: %s' % (step, acc))
-                    test_writer.add_summary(
-                        summary, epoch * 10000 + step)
+                    a = 1
+                    # sess.run(validation_iterator.initializer)
+                    # # Run the whole thing
+                    # summary, acc = sess.run([merged, accuracy], feed_dict={
+                    #     handle: validation_handle, keep_prob: 1.0})
+                    # print('Accuracy at step %s: %s' % (step, acc))
+                    # test_writer.add_summary(
+                    #     summary, epoch * 10000 + step)
                 else:  # Record train set data summaries and train
                     if step % 100 == 99:  # Record execution stats
                         run_options = tf.RunOptions(
@@ -250,3 +241,13 @@ def train(dir_name, res):
                             summary, epoch * 6104 + step)
             except tf.errors.OutOfRangeError:
                 break
+
+
+def main():
+    dir_name = sys.argv[1]
+    res = int(sys.argv[2])
+    train(dir_name, res)
+
+
+if __name__ == "__main__":
+    main()

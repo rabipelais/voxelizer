@@ -82,7 +82,7 @@ def parse_function(width, height, depth, record):
 def train(dir_name, res):
     batch_size = 20
     shuffle_size = 10000
-    num_epochs = 1
+    num_epochs = 20
 
     training_records = os.path.join(dir_name, "training.tfrecord")
     test_records = os.path.join(dir_name, "test.tfrecord")
@@ -224,6 +224,7 @@ def train(dir_name, res):
 
     # RUN THE TRAINING LOOPY LOOP
     tf.global_variables_initializer().run()
+    total_steps = 0
 
     for epoch in range(num_epochs):
         sess.run(training_iterator.initializer)
@@ -253,14 +254,15 @@ def train(dir_name, res):
                         train_writer.add_run_metadata(
                             run_metadata, 'epoch%10d step%10d' % (epoch, step))
                         train_writer.add_summary(
-                            summary, epoch * 6104 / batch_size + step)
+                            summary, total_steps + step)
                     else:  # Record a summary
                         summary, _, _ = sess.run([merged, train_step, confusion_update], feed_dict={
                             handle: training_handle, keep_prob: 0.5})
 
                         train_writer.add_summary(
-                            summary, epoch * 6104 + step)
+                            summary, total_steps + step)
             except tf.errors.OutOfRangeError:
+                total_steps += step
                 break
 
 

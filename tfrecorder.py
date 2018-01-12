@@ -74,7 +74,7 @@ def _int64_feature_list(value):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Read the files in DIR and join them into TFRecords. It assumes that each filename has the following format: {test,train}_LABEL_number.vox, where LABEL is the category of the object, and number and arbitrary (unique) identifier. It will output one file for the test data, and one for the training data, and a text file with a label-class id correspondence.\n Example file name: test_bathtub_0229.vox')
+        description='Read the files in DIR and join them into TFRecords. It assumes that each filename has the following format: {test,train}_LABEL_number.vox, where LABEL is the category of the object, and number an arbitrary identifier. It will output one file for the test data, and one for the training data, and a text file with a label-class id correspondence.\n Example file name: test_bathtub_0229.vox')
 
     parser.add_argument('source', metavar='DIR',
                         help='Directory with the .vox files.')

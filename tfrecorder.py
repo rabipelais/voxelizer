@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import os
 import sys
+import argparse
 
 import voxelizer
 
@@ -72,12 +73,29 @@ def _int64_feature_list(value):
 
 
 if __name__ == '__main__':
-    dir_name = sys.argv[1]
+    parser = argparse.ArgumentParser(
+        description='Read the files in DIR and join them into TFRecords. It assumes that each filename has the following format: {test,train}_LABEL_number.vox, where LABEL is the category of the object, and number and arbitrary (unique) identifier. It will output one file for the test data, and one for the training data, and a text file with a label-class id correspondence.\n Example file name: test_bathtub_0229.vox')
+
+    parser.add_argument('source', metavar='DIR',
+                        help='Directory with the .vox files.')
+
+    parser.add_argument('--destination', '-o',
+                        help='Name of the output directory. If not given, if will output the files into the source dir.')
+
+    args = parser.parse_args()
+
+    dir_name = args.source
+
+    if args.destination:
+        out_dir_name = args.destination
+    else:
+        out_dir_name = dir_name
+
     train_set, test_set, labels_dict = read_data(dir_name)
 
     # Write training data
     train_writer = tf.python_io.TFRecordWriter(
-        os.path.join(dir_name, "training.tfrecord"))
+        os.path.join(out_dir_name, "training.tfrecord"))
     for data, label in train_set:
         (width, height, depth) = data.shape
         example = tf.train.Example(features=tf.train.Features(feature={
@@ -90,7 +108,7 @@ if __name__ == '__main__':
 
     # Write test data
     test_writer = tf.python_io.TFRecordWriter(
-        os.path.join(dir_name, "test.tfrecord"))
+        os.path.join(out_dir_name, "test.tfrecord"))
     for data, label in test_set:
         (width, height, depth) = data.shape
         example = tf.train.Example(features=tf.train.Features(feature={
@@ -108,7 +126,7 @@ if __name__ == '__main__':
     #   data = np.array(example.features.feature['data'].float_list.value)
 
     # Write labels dictionary
-    labels_file = os.path.join(dir_name, "labels.txt")
+    labels_file = os.path.join(out_dir_name, "labels.txt")
     with open(labels_file, 'w') as file_handle:
         for cat in labels_dict:
             file_handle.write(cat + " ")

@@ -7,6 +7,7 @@ import random
 import multiprocessing
 import urllib
 import zipfile
+import argparse
 
 from voxelizer import *
 
@@ -15,60 +16,87 @@ sys.path.append('.')
 random.seed(42)
 np.random.seed(42)
 
-vx_res = 32
+
+parser = argparse.ArgumentParser(
+    description='Create a voxelized grid of resolution RESOLUTION from FILEs. If no files are given, it will use the ModelNet10 dataset, and download it if not present in the folder `m10`.')
+
+parser.add_argument('--resolution', '-r', type=int, required=True,
+                    help='The resolution of the voxel grid.')
+
+parser.add_argument('--processes', '-j', type=int, default=1,
+                    help='The number of threads for the voxelizing (default: 1).')
+
+parser.add_argument('source', nargs='*', metavar='FILE',
+                    help='OFF files to voxelize.')
+
+parser.add_argument('--destination', '-o',
+                    help='Name of the output directory. If not given, will be `preprocessed-res-RESOLUTION`.')
+
+args = parser.parse_args()
+
+vx_res = args.resolution
 pad = 2
-out_root = './preprocessed-res-' + str(vx_res)
+if args.destination:
+    out_root = args.destination
+else:
+    out_root = './preprocessed-res-' + str(vx_res)
+
 n_rots = 1
-n_processes = 4
+n_processes = args.processes
 
-# get MN10 data
-if not os.path.exists('mn10.zip'):
-    print('downloading ModelNet10')
-    mn10 = urllib.URLopener()
-    mn10.retrieve(
-        "http://vision.princeton.edu/projects/2014/3DShapeNets/ModelNet10.zip", "mn10.zip")
+# list all off files
+off_paths = []
 
-in_root = 'mn10'
-if not os.path.isdir(in_root):
-    print('unzipping ModelNet10')
-    mn10 = zipfile.ZipFile('mn10.zip', 'r')
-    mn10.extractall(in_root)
-    mn10.close()
+if len(args.source) < 1:
+    # get MN10 data
+    if not os.path.exists('mn10.zip'):
+        print('downloading ModelNet10')
+        mn10 = urllib.URLopener()
+        mn10.retrieve(
+            "http://vision.princeton.edu/projects/2014/3DShapeNets/ModelNet10.zip", "mn10.zip")
+
+    in_root = 'mn10'
+    if not os.path.isdir(in_root):
+        print('unzipping ModelNet10')
+        mn10 = zipfile.ZipFile('mn10.zip', 'r')
+        mn10.extractall(in_root)
+        mn10.close()
+
+    for root, dirs, files in os.walk(in_root):
+        off_paths.extend(glob(os.path.join(root, '*.off')))
+    off_paths.sort()
+else:
+    off_paths = args.source
+
 
 # create out directory
 if not os.path.isdir(out_root):
     os.makedirs(out_root)
 
 
-# list all off files
-off_paths = []
-for root, dirs, files in os.walk(in_root):
-    off_paths.extend(glob(os.path.join(root, '*.off')))
-off_paths.sort()
-
 # fix off header for MN meshes
 print('fixing off headers')
-# for path in off_paths:
-#   f = open(path, 'r')
-#   lines = f.readlines()
-#   f.close()
+for path in off_paths:
+    f = open(path, 'r')
+    lines = f.readlines()
+    f.close()
 
-#   # parse header
-#   if lines[0].strip().lower() != 'off':
-#     print(path)
-#     print(lines[0])
+    # parse header
+    if lines[0].strip().lower() != 'off':
+        print(path)
+        print(lines[0])
 
-#     splits = lines[0][3:].strip().split(' ')
-#     n_verts = int(splits[0])
-#     n_faces = int(splits[1])
-#     n_other = int(splits[2])
+        splits = lines[0][3:].strip().split(' ')
+        n_verts = int(splits[0])
+        n_faces = int(splits[1])
+        n_other = int(splits[2])
 
-#     f = open(path, 'w')
-#     f.write('OFF\n')
-#     f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
-#     for line in lines[1:]:
-#       f.write(line)
-#     f.close()
+        f = open(path, 'w')
+        f.write('OFF\n')
+        f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
+        for line in lines[1:]:
+            f.write(line)
+        f.close()
 
 # create voxel grid from off mesh
 

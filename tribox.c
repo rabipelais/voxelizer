@@ -187,13 +187,29 @@ int triBoxOverlap(float boxcenter[3],float boxhalfsize[3],float triverts[3][3])
    return 1;   /* box and triangle overlaps */
 }
 
-int blockTriangle(float cx, float cy, float cz, int nVerts, float* verts, int nFaces, int* faces) {
-	float halfSizes[3] = {0.5, 0.5, 0.5};
-	float vx_c[3];
-	vx_c[0] = cx;
-	vx_c[1] = cy;
-	vx_c[2] = cz;
+int blockTriangle(float vertArray[3][3], int width, int height, int depth, int nBlocks, int* out) {
+	for(int i = 0; i < nBlocks; i++) {
+		int gd = i / (height * width);
+		int gh = (i / width) % height;
+		int gw = i % width;
+		float halfSizes[3] = {0.5, 0.5, 0.5};
+		float vx_c[3];
+		vx_c[0] = gw + 0.5;
+		vx_c[1] = gh + 0.5;
+		vx_c[2] = gd + 0.5;
+		if(out[i] == 0) {
+			int intersection = triBoxOverlap(vx_c, halfSizes, vertArray);
+			if(intersection > 0) {
+				out[i] = 1;
+			}
+		}
+	}
+}
 
+void calculateVoxels(int nVerts, float* verts, int nFaces, int* faces, int width, int height, int depth, int* out) {
+	int nBlocks = width * height * depth;
+
+    #pragma omp parallel for
 	for(int i = 0; i < nFaces / 3; i++) {
 		float vertArray[3][3];
 		for(int y = 0; y < 3; y++) {
@@ -202,24 +218,6 @@ int blockTriangle(float cx, float cy, float cz, int nVerts, float* verts, int nF
 			}
 		}
 
-		int intersection = triBoxOverlap(vx_c, halfSizes, vertArray);
-
-		if(intersection > 0) {
-			return 1;
-		}
-	}
-	return 0;
-}
-
-void calculateVoxels(int nVerts, float* verts, int nFaces, int* faces, int width, int height, int depth, int* out) {
-	int nBlocks = width * height * depth;
-
-    #pragma omp parallel for
-	for(int i = 0; i < nBlocks; i++) {
-		int gd = i / (height * width);
-		int gh = (i / width) % height;
-		int gw = i % width;
-
-		out[i] = blockTriangle(gw + 0.5, gh + 0.5, gd + 0.5, nVerts, verts, nFaces, faces);
+		blockTriangle(vertArray, width, height, depth, nBlocks, out);
 	}
 }

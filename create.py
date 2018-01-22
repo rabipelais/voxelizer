@@ -32,6 +32,9 @@ parser.add_argument('source', nargs='*', metavar='FILE',
 parser.add_argument('--destination', '-o',
                     help='Name of the output directory. If not given, will be `preprocessed-res-RESOLUTION`.')
 
+parser.add_argument(
+    '--fix', help='Fix OFF file headers', action="store_true")
+
 args = parser.parse_args()
 
 vx_res = args.resolution
@@ -43,6 +46,8 @@ else:
 
 n_rots = 1
 n_processes = args.processes
+
+fix_offs_p = args.fix
 
 # list all off files
 off_paths = []
@@ -75,28 +80,29 @@ if not os.path.isdir(out_root):
 
 
 # fix off header for MN meshes
-print('fixing off headers')
-for path in off_paths:
-    f = open(path, 'r')
-    lines = f.readlines()
-    f.close()
-
-    # parse header
-    if lines[0].strip().lower() != 'off':
-        print(path)
-        print(lines[0])
-
-        splits = lines[0][3:].strip().split(' ')
-        n_verts = int(splits[0])
-        n_faces = int(splits[1])
-        n_other = int(splits[2])
-
-        f = open(path, 'w')
-        f.write('OFF\n')
-        f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
-        for line in lines[1:]:
-            f.write(line)
+if(fix_offs_p):
+    print('fixing off headers')
+    for path in off_paths:
+        f = open(path, 'r')
+        lines = f.readlines()
         f.close()
+
+        # parse header
+        if lines[0].strip().lower() != 'off':
+            print(path)
+            print(lines[0])
+
+            splits = lines[0][3:].strip().split(' ')
+            n_verts = int(splits[0])
+            n_faces = int(splits[1])
+            n_other = int(splits[2])
+
+            f = open(path, 'w')
+            f.write('OFF\n')
+            f.write('%d %d %d\n' % (n_verts, n_faces, n_other))
+            for line in lines[1:]:
+                f.write(line)
+            f.close()
 
 # create voxel grid from off mesh
 

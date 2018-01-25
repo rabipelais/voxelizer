@@ -59,13 +59,13 @@ def pooling_layer(input_tensor, layer_name):
     return pooled
 
 
-def parse_function(width, height, depth, record):
+def parse_function(width, height, depth, cats, record):
     features = {
         'width': tf.FixedLenFeature((), tf.int64),
         'height': tf.FixedLenFeature((), tf.int64),
         'depth': tf.FixedLenFeature((), tf.int64),
         'data': tf.FixedLenFeature((width, height, depth), tf.float32),
-        'label_one_hot': tf.FixedLenFeature((10), tf.int64)  # TODO
+        'label_one_hot': tf.FixedLenFeature((cats), tf.int64)  # TODO
     }
 
     parsed_features = tf.parse_single_example(record, features)
@@ -87,13 +87,17 @@ def train(dir_name, res):
     training_records = os.path.join(dir_name, "training.tfrecord")
     test_records = os.path.join(dir_name, "test.tfrecord")
 
+    num_cats = sum(1 for line in open(os.path.join(dir_name, "labels.txt")))
+    print("Found " + str(num_cats) + " categories")
+
     dataset = tf.data.TFRecordDataset([training_records])
-    dataset = dataset.map(partial(parse_function, res, res, res))
+    dataset = dataset.map(partial(parse_function, res, res, res, num_cats))
     dataset = dataset.shuffle(shuffle_size)
     dataset = dataset.batch(batch_size)
 
     test_dataset = tf.data.TFRecordDataset([test_records])
-    test_dataset = test_dataset.map(partial(parse_function, res, res, res))
+    test_dataset = test_dataset.map(
+        partial(parse_function, res, res, res, num_cats))
     test_dataset = test_dataset.shuffle(shuffle_size)
     test_dataset = test_dataset.batch(64)
 
@@ -157,10 +161,10 @@ def train(dir_name, res):
 
     with tf.name_scope('readout'):
         with tf.name_scope('weights'):
-            W_fc2 = weight_variable([512, 10])
+            W_fc2 = weight_variable([512, num_cats])
             variable_summaries(W_fc2)
         with tf.name_scope('biases'):
-            b_fc2 = bias_variable([10])
+            b_fc2 = bias_variable([num_cats])
             variable_summaries(b_fc2)
         with tf.name_scope('Wx_plus_b'):
             y_readout = tf.matmul(h_fc1, W_fc2) + b_fc2
@@ -198,7 +202,7 @@ def train(dir_name, res):
     tf.summary.scalar("accuracy", accuracy)
 
     with tf.name_scope("confusion_matrix"):
-        num_classes = 10
+        num_classes = num_cats
         # Compute a per-batch confusion
         batch_confusion = tf.confusion_matrix(cat_label, cat_predicted,
                                               num_classes=num_classes,

@@ -232,6 +232,9 @@ def train(dir_name, res):
     tf.global_variables_initializer().run()
     total_steps = 0
 
+    # Add ops to save and restore all the variables.
+    saver = tf.train.Saver()
+
     for epoch in range(num_epochs):
         sess.run(training_iterator.initializer)
         step = -1
@@ -260,6 +263,10 @@ def train(dir_name, res):
                             run_metadata, 'epoch%10d step%10d' % (epoch, step))
                         train_writer.add_summary(
                             summary, total_steps + step)
+                        save_path = saver.save(sess, os.path.join(
+                            dir_name, "model-" + str(total_steps + step) + ".ckpt"))
+
+                        print("Model saved in file: %s" % save_path)
                     else:  # Record a summary
                         summary, _, _ = sess.run([merged, train_step, confusion_update], feed_dict={
                             handle: training_handle, keep_prob: 0.5})

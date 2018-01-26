@@ -7,34 +7,33 @@ import argparse
 import voxelizer
 
 
-def read_data(dir):
-    labels_dict = {}
-    current_label_idx = 0
+def read_data(dir, current_label_idx, labels_dict):
+    test_data = []
+    train_data = []
+    test_labels = []
+    train_labels = []
     # Read the data
     for (dirpath, dirnames, filenames) in os.walk(dir):
-        train_data = []
-        test_data = []
-        train_labels = []
-        test_labels = []
         for name in filenames:
             basename, ext = os.path.splitext(name)
             if ext != '.vox':
                 continue
             grid = voxelizer.read_grid(os.path.join(dirpath, name))
 
-            components = basename.split('_')
-            train_p = components[0]
-            label_name = "-".join(components[1:-1])
+            path = os.path.normpath(dir).split(os.path.sep)
+            cat = path[0]
+            train_test = path[1]
 
             label_idx = -1
-            if label_name in labels_dict:
-                label_idx = labels_dict[label_name]
+            if cat in labels_dict:
+                label_idx = labels_dict[cat]
             else:
-                labels_dict[label_name] = current_label_idx
+                print("Found new class: " + cat)
+                labels_dict[cat] = current_label_idx
                 label_idx = current_label_idx
                 current_label_idx += 1
 
-            if train_p == "train":
+            if train_test == "train":
                 train_data.append(grid)
                 train_labels.append(label_idx)
             else:
@@ -44,7 +43,13 @@ def read_data(dir):
         train = zip(train_data, one_hot(train_labels, len(labels_dict)))
         test = zip(test_data, one_hot(test_labels, len(labels_dict)))
 
-        return train, test, labels_dict
+        for sub_dir in dirnames:
+            train_sub, test_sub, labels_sub, current_label_idx = read_data(
+                os.path.join(dir, sub_dir), current_label_idx, labels_dict)
+            train += train_sub
+            test += test_sub
+
+        return train, test, labels_dict, current_label_idx
 
 
 def one_hot(indices, cats):
@@ -91,7 +96,7 @@ if __name__ == '__main__':
     else:
         out_dir_name = dir_name
 
-    train_set, test_set, labels_dict = read_data(dir_name)
+    train_set, test_set, labels_dict, _ = read_data(dir_name, 0, {})
 
     # Write training data
     train_writer = tf.python_io.TFRecordWriter(
@@ -119,13 +124,8 @@ if __name__ == '__main__':
             'label_one_hot': _int64_feature_list(label)}))
         test_writer.write(example.SerializeToString())
 
-    # for serialized_example in tf.python_io.tf_record_iterator(test_records):
-    #    example = tf.train.Example()
-    #    example.ParseFromString(serialized_example)
-    #    height = np.array(example.features.feature['height'].int64_list.value)
-    #   data = np.array(example.features.feature['data'].float_list.value)
-
     # Write labels dictionary
+    print(labels_dict)
     labels_file = os.path.join(out_dir_name, "labels.txt")
     with open(labels_file, 'w') as file_handle:
         for cat in labels_dict:

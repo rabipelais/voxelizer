@@ -213,11 +213,22 @@ def train(dir_name, res):
                                          dtype=tf.int32),
                                 name='confusion')
         # Create the update op for doing a "+=" accumulation on the batch
-        confusion_update = confusion.assign(confusion + batch_confusion)
+        confusion_update = tf.assign(confusion, confusion + batch_confusion)
 
-        # Cast counts to float so tf.summary.image renormalizes to [0,255]
-        confusion_image = tf.reshape(tf.cast(confusion, tf.float32),
+        confusion_image = tf.reshape(tf.cast(confusion_update, tf.float32),
                                      [1, num_classes, num_classes, 1])
+
+        # Scale and colour
+        current_max = tf.reduce_max(confusion_image, [0, 1, 2])
+
+        # To [0, 1]
+        confusion_image = confusion_image / current_max
+
+        min_color = tf.constant([255, 255, 255], dtype=tf.float32)
+        max_color = tf.constant([49, 130, 189], dtype=tf.float32)
+        color_vec = max_color - min_color
+
+        confusion_image = confusion_image * color_vec + min_color
 
     tf.summary.image('confusion', confusion_image)
 

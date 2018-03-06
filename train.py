@@ -266,6 +266,10 @@ def train(dir_name, res):
                     print('Accuracy at step %s: %s' % (step, acc))
                     test_writer.add_summary(
                         summary, total_steps + step)
+                    save_path = saver.save(sess, os.path.join(
+                        dir_name, "model.ckpt"))
+
+                    print("Model saved in dir: %s" % save_dir_name)
                 else:  # Record train set data summaries and train
                     if step % 100 == 99:  # Record execution stats
                         run_options = tf.RunOptions(
@@ -278,9 +282,9 @@ def train(dir_name, res):
                         train_writer.add_summary(
                             summary, total_steps + step)
                         save_path = saver.save(sess, os.path.join(
-                            dir_name, "model-" + str(total_steps + step) + ".ckpt"))
+                            dir_name, "model.ckpt"))
 
-                        print("Model saved in file: %s" % save_path)
+                        print("Model saved in dir: %s" % dir_name)
                     else:  # Record a summary
                         summary, _, _ = sess.run([merged, train_step, confusion_update], feed_dict={
                             handle: training_handle, keep_prob: 0.5})

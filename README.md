@@ -35,3 +35,11 @@ To view the TensorBoard results, run
         tensorboard --logdir DIR --port 6006
 
 and you can now view it on Internet Explorer 6 at `localhost:6006`.
+
+
+## Using the trained model for prediction
+To use a model you trained in the last step to predict the category of a voxelized object, run the following command: `python evaluate.py OBJECT.vox -m /DIR/TO/MODEL/model.ckpt -l /DIR/TO/LABELS/labels.txt`, for example:
+
+`python evaluate.py ~/Documents/TrainingSet4-OnlyWashers/train_FLAT\ WASHER_001.vox  -m ~/Documents/TrainingSet4-OnlyWashers/model.ckpt -l ~/Documents/TrainingSet4-OnlyWashers/labels.txt `
+
+Run with the `--help` option for more information.

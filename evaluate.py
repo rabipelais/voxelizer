@@ -9,7 +9,7 @@ from tensorflow.python.tools import inspect_checkpoint as chkp
 import voxelizer
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='')
+    parser = argparse.ArgumentParser(description='Evaluate the object in FILE using the trained MODEL and outputs the softmaxed belief vector for each category with the labels in LABELS.')
 
     parser.add_argument('--model', '-m',
                         help='Name of the model save file. Default: `./model.ckpt` (just the prefix, not the numbers or the postfix after the dash)')

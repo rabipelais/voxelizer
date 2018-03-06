@@ -101,7 +101,7 @@ def train(dir_name, res):
     test_dataset = test_dataset.shuffle(shuffle_size)
     test_dataset = test_dataset.batch(64)
 
-    handle = tf.placeholder(tf.string, shape=[])
+    handle = tf.placeholder(tf.string, shape=[], name="handle")
     iterator = tf.data.Iterator.from_string_handle(
         handle, dataset.output_types, dataset.output_shapes)
 
@@ -115,7 +115,7 @@ def train(dir_name, res):
     training_handle = sess.run(training_iterator.string_handle())
     validation_handle = sess.run(validation_iterator.string_handle())
 
-    x = next_element
+    x = tf.placeholder_with_default(next_element, shape=None, name="x_input")
     y_ = next_label
 
     # BUILD GRAPH
@@ -143,7 +143,7 @@ def train(dir_name, res):
     with tf.name_scope('dropout'):
         h_pool10_flat = tf.reshape(h_from_prev, [-1, output_dim * 8 * 8 * 8])
         # To be able to turn it off during testing
-        keep_prob = tf.placeholder(tf.float32)
+        keep_prob = tf.placeholder(tf.float32, name="keep_prob")
         h_pool_drop = tf.nn.dropout(h_pool10_flat, keep_prob)
 
     with tf.name_scope('fully_connected'):
@@ -167,7 +167,7 @@ def train(dir_name, res):
             b_fc2 = bias_variable([num_cats])
             variable_summaries(b_fc2)
         with tf.name_scope('Wx_plus_b'):
-            y_readout = tf.matmul(h_fc1, W_fc2) + b_fc2
+            y_readout = tf.add(tf.matmul(h_fc1, W_fc2), b_fc2, name="y_readout")
             tf.summary.histogram('pre_activations', y_readout)
 
     with tf.name_scope('cross_entropy'):
@@ -269,7 +269,7 @@ def train(dir_name, res):
                     save_path = saver.save(sess, os.path.join(
                         dir_name, "model.ckpt"))
 
-                    print("Model saved in dir: %s" % save_dir_name)
+                    print("Model saved in dir: %s" % dir_name)
                 else:  # Record train set data summaries and train
                     if step % 100 == 99:  # Record execution stats
                         run_options = tf.RunOptions(

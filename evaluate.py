@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import argparse
+from tensorflow.python.tools import inspect_checkpoint as chkp
 
 import voxelizer
 
@@ -45,14 +46,33 @@ def read_data(source):
         exit()
     grid = voxelizer.read_grid(source)
 
-
+    return grid
 
 def main():
     args = parse_args()
     print args
 
     grid = read_data(args['source'])
-    print grid
+
+    sess = tf.Session()
+
+    #Load graph metadata and restore weights
+    saver = tf.train.import_meta_graph(args['model'] + '.meta')
+    saver.restore(sess, args['model'])
+
+    graph = tf.get_default_graph()
+
+    y_readout = graph.get_tensor_by_name("readout/Wx_plus_b/y_readout:0")
+    keep_prob = graph.get_tensor_by_name("dropout/keep_prob:0")
+    x_input = graph.get_tensor_by_name("x_input:0")
+
+    result_vector = tf.nn.softmax(y_readout) * 100
+
+    result = sess.run(result_vector, feed_dict={x_input: grid, keep_prob: 1.0})
+
+    result = result[0]
+    for cat in result:
+        print cat
 
 if __name__ == "__main__":
     main()

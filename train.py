@@ -223,14 +223,17 @@ def train(dir_name, res):
 
         # To [0, 1]
         confusion_image = confusion_image / current_max
+        confusion_image_normalized = confusion_image / tf.reshape(tf.reduce_sum(confusion_image, [2]), [1, num_classes, 1, 1])
 
         min_color = tf.constant([255, 255, 255], dtype=tf.float32)
         max_color = tf.constant([49, 130, 189], dtype=tf.float32)
         color_vec = max_color - min_color
 
         confusion_image = confusion_image * color_vec + min_color
+        confusion_image_normalized = confusion_image_normalized * color_vec + min_color
 
     tf.summary.image('confusion', confusion_image)
+    tf.summary.image('confusion_normalized', confusion_image_normalized)
 
     merged = tf.summary.merge_all()
 

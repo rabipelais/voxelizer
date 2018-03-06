@@ -213,7 +213,7 @@ def train(dir_name, res):
                                          dtype=tf.int32),
                                 name='confusion')
         # Create the update op for doing a "+=" accumulation on the batch
-        confusion_update = tf.assign(confusion, confusion + batch_confusion)
+        confusion_update = tf.assign(confusion, batch_confusion)
 
         confusion_image = tf.reshape(tf.cast(confusion_update, tf.float32),
                                      [1, num_classes, num_classes, 1])

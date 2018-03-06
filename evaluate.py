@@ -13,10 +13,8 @@ def parse_args():
 
     parser.add_argument('--model', '-m',
                         help='Name of the model save file. Default: `./model.ckpt` (just the prefix, not the numbers or the postfix after the dash)')
-
     parser.add_argument('--labels', '-l',
                     help='File with the mappings to category names. Default: `./labels.txt`')
-
     parser.add_argument('source', metavar='FILE',
                     help='`.vox` input file.')
 
@@ -71,8 +69,23 @@ def main():
     result = sess.run(result_vector, feed_dict={x_input: grid, keep_prob: 1.0})
 
     result = result[0]
-    for cat in result:
-        print cat
+
+    #Read labels
+    with open(args["labels"]) as f:
+        labels = f.readlines()
+
+    #Remove trailing number
+    labels = [x.strip().rsplit(' ', 1)[0] for x in labels]
+
+    categories = zip(result, labels)
+
+    for (r, cat) in categories:
+        print("Category `{}`: {:3.2f}%".format(cat, r))
+
+    maximal = max(categories, key=lambda item:item[0])[1]
+
+    print("")
+    print("I believe the correct prediction is: `{}`".format(maximal))
 
 if __name__ == "__main__":
     main()

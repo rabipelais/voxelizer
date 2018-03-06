@@ -5,7 +5,9 @@ import os
 import sys
 import argparse
 
-def parseArgs():
+import voxelizer
+
+def parse_args():
     parser = argparse.ArgumentParser(description='')
 
     parser.add_argument('--model', '-m',
@@ -36,10 +38,21 @@ def parseArgs():
            "source": source}
     return res
 
+def read_data(source):
+    basename, ext = os.path.splitext(source)
+    if ext != '.vox':
+        print("Error: FILE needs to be a valid `.vox` file.")
+        exit()
+    grid = voxelizer.read_grid(source)
+
+
 
 def main():
-    args = parseArgs()
+    args = parse_args()
     print args
+
+    grid = read_data(args['source'])
+    print grid
 
 if __name__ == "__main__":
     main()
